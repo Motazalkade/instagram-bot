@@ -1,0 +1,4 @@
+python-telegram-bot==22.5
+aiohttp==3.13.3
+requests==2.31.0
+asyncio-contextmanager==1.0.0
