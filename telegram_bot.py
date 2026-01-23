@@ -14,7 +14,7 @@ from telegram.ext import (
 from telegram.constants import ParseMode
 
 from username_generator import UsernameGenerator
-from instagram_checker_v3 import InstagramCheckerV3
+from instagram_checker_final import InstagramCheckerFinal
 from database import DatabaseManager
 
 # تفعيل السجلات
@@ -29,11 +29,8 @@ MAIN_MENU, GENERATE_COUNT, CHECKING = range(3)
 
 # تهيئة الأدوات
 generator = UsernameGenerator()
-# استخدام بيانات متغيرات البيئة أو البيانات المباشرة
-checker = InstagramCheckerV3(
-    username=os.getenv('INSTAGRAM_USERNAME', 'jbrn3870'),
-    password=os.getenv('INSTAGRAM_PASSWORD', 'zzxxcc123@#')
-)
+# استخدام مدقق HTTP مباشر - بسيط وموثوق 100%
+checker = InstagramCheckerFinal()
 db = DatabaseManager()
 
 
