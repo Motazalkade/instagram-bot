@@ -5,6 +5,7 @@
 
 import logging
 import asyncio
+import os
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import (
     Application, CommandHandler, CallbackQueryHandler, 
@@ -13,7 +14,7 @@ from telegram.ext import (
 from telegram.constants import ParseMode
 
 from username_generator import UsernameGenerator
-from instagram_checker import InstagramChecker
+from instagram_checker_v3 import InstagramCheckerV3
 from database import DatabaseManager
 
 # تفعيل السجلات
@@ -27,15 +28,44 @@ logger = logging.getLogger(__name__)
 MAIN_MENU, GENERATE_COUNT, CHECKING = range(3)
 
 # تهيئة الأدوات
-import os
-
 generator = UsernameGenerator()
 # استخدام بيانات متغيرات البيئة أو البيانات المباشرة
-checker = InstagramCheckerV2(
+checker = InstagramCheckerV3(
     username=os.getenv('INSTAGRAM_USERNAME', 'jbrn3870'),
     password=os.getenv('INSTAGRAM_PASSWORD', 'zzxxcc123@#')
 )
 db = DatabaseManager()
+
+
+async def show_main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    """عرض القائمة الرئيسية"""
+    keyboard = [
+        [InlineKeyboardButton("🔄 إنشاء والتحقق", callback_data='generate_check')],
+        [InlineKeyboardButton("📊 عرض الإحصائيات", callback_data='statistics')],
+        [InlineKeyboardButton("📋 اليوزرات المتاحة", callback_data='show_available')],
+        [InlineKeyboardButton("ℹ️ معلومات", callback_data='info')]
+    ]
+    
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    
+    welcome_message = """
+🏠 **القائمة الرئيسية**
+
+اختر من الخيارات أدناه:
+    """
+    
+    if update.callback_query:
+        await update.callback_query.edit_message_text(
+            text=welcome_message,
+            reply_markup=reply_markup
+        )
+    else:
+        await update.message.reply_text(
+            text=welcome_message,
+            reply_markup=reply_markup
+        )
+    
+    return MAIN_MENU
 
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
@@ -74,51 +104,52 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
     query = update.callback_query
     await query.answer()
     
-    if query.data == 'generate_check':
-        await query.edit_message_text(
-            text="كم عدد اليوزرات التي تريد إنشاؤها والتحقق منها؟\n\n(أدخل رقماً من 1 إلى 50)",
-            reply_markup=None
-        )
-        return GENERATE_COUNT
-    
-    elif query.data == 'statistics':
-        stats = db.get_statistics()
-        stats_message = f"""
-📊 الإحصائيات:
+    try:
+        if query.data == 'generate_check':
+            await query.edit_message_text(
+                text="كم عدد اليوزرات التي تريد إنشاؤها والتحقق منها؟\n\n(أدخل رقماً من 1 إلى 50)",
+                reply_markup=None
+            )
+            return GENERATE_COUNT
+        
+        elif query.data == 'statistics':
+            stats = db.get_statistics()
+            stats_message = f"""
+📊 **الإحصائيات:**
 
 📌 إجمالي اليوزرات المتاحة: {stats.get('total_available_usernames', 0)}
 🔍 إجمالي الفحوصات: {stats.get('total_checks', 0)}
 ✅ اليوزرات المتاحة من الفحوصات: {stats.get('available_from_checks', 0)}
-        """
+            """
+            
+            keyboard = [
+                [InlineKeyboardButton("⬅️ العودة للقائمة الرئيسية", callback_data='back_to_main')]
+            ]
+            reply_markup = InlineKeyboardMarkup(keyboard)
+            
+            await query.edit_message_text(stats_message, reply_markup=reply_markup)
+            return MAIN_MENU
         
-        keyboard = [
-            [InlineKeyboardButton("⬅️ العودة للقائمة الرئيسية", callback_data='back_to_main')]
-        ]
-        reply_markup = InlineKeyboardMarkup(keyboard)
+        elif query.data == 'show_available':
+            usernames = db.get_recent_available_usernames(20)
+            
+            if usernames:
+                usernames_text = '\n'.join([f"• @{u}" for u in usernames])
+                message = f"📋 **أحدث {len(usernames)} يوزرات متاحة:**\n\n{usernames_text}"
+            else:
+                message = "❌ لا توجد يوزرات متاحة حتى الآن."
+            
+            keyboard = [
+                [InlineKeyboardButton("⬅️ العودة للقائمة الرئيسية", callback_data='back_to_main')]
+            ]
+            reply_markup = InlineKeyboardMarkup(keyboard)
+            
+            await query.edit_message_text(message, reply_markup=reply_markup)
+            return MAIN_MENU
         
-        await query.edit_message_text(stats_message, reply_markup=reply_markup)
-        return MAIN_MENU
-    
-    elif query.data == 'show_available':
-        usernames = db.get_recent_available_usernames(20)
-        
-        if usernames:
-            usernames_text = '\n'.join([f"• {u}" for u in usernames])
-            message = f"📋 أحدث {len(usernames)} يوزرات متاحة:\n\n{usernames_text}"
-        else:
-            message = "لا توجد يوزرات متاحة حتى الآن."
-        
-        keyboard = [
-            [InlineKeyboardButton("⬅️ العودة للقائمة الرئيسية", callback_data='back_to_main')]
-        ]
-        reply_markup = InlineKeyboardMarkup(keyboard)
-        
-        await query.edit_message_text(message, reply_markup=reply_markup)
-        return MAIN_MENU
-    
-    elif query.data == 'info':
-        info_message = """
-ℹ️ معلومات عن البوت:
+        elif query.data == 'info':
+            info_message = """
+ℹ️ **معلومات عن البوت:**
 
 🤖 **الميزات:**
 • إنشاء يوزرات عشوائية مكونة من 4 أحرف
@@ -134,18 +165,23 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
 
 ⏱️ **ملاحظة:**
 قد يستغرق الفحص بعض الوقت حسب عدد اليوزرات.
-        """
+            """
+            
+            keyboard = [
+                [InlineKeyboardButton("⬅️ العودة للقائمة الرئيسية", callback_data='back_to_main')]
+            ]
+            reply_markup = InlineKeyboardMarkup(keyboard)
+            
+            await query.edit_message_text(info_message, reply_markup=reply_markup)
+            return MAIN_MENU
         
-        keyboard = [
-            [InlineKeyboardButton("⬅️ العودة للقائمة الرئيسية", callback_data='back_to_main')]
-        ]
-        reply_markup = InlineKeyboardMarkup(keyboard)
-        
-        await query.edit_message_text(info_message, reply_markup=reply_markup)
-        return MAIN_MENU
+        elif query.data == 'back_to_main':
+            await show_main_menu(update, context)
+            return MAIN_MENU
     
-    elif query.data == 'back_to_main':
-        await start(update, context)
+    except Exception as e:
+        logger.error(f"خطأ في معالج الأزرار: {e}")
+        await query.answer("حدث خطأ، يرجى المحاولة مرة أخرى", show_alert=True)
         return MAIN_MENU
 
 
@@ -177,7 +213,7 @@ async def handle_count_input(update: Update, context: ContextTypes.DEFAULT_TYPE)
         )
         
         # التحقق من اليوزرات
-        results = await checker.check_batch_usernames(usernames)
+        results = await checker.check_batch_usernames(usernames, batch_size=2)
         
         # استخراج اليوزرات المتاحة
         available_usernames = checker.get_available_usernames(results)
@@ -191,8 +227,8 @@ async def handle_count_input(update: Update, context: ContextTypes.DEFAULT_TYPE)
                 db.add_check_history(
                     result['username'],
                     result['available'],
-                    result['status_code'],
-                    result['error']
+                    result.get('user_id'),
+                    result.get('error')
                 )
         
         # تحضير رسالة النتائج
@@ -201,12 +237,12 @@ async def handle_count_input(update: Update, context: ContextTypes.DEFAULT_TYPE)
         results_message = f"""
 ✅ **انتهى الفحص!**
 
-📊 النتائج:
+📊 **النتائج:**
 • إجمالي الفحوصات: {len(results)}
 • ✅ اليوزرات المتاحة: {len(available_usernames)}
 • ❌ اليوزرات المستخدمة: {len(unavailable)}
 
-🎉 اليوزرات المتاحة الجديدة:
+🎉 **اليوزرات المتاحة الجديدة:**
         """
         
         if available_usernames:
@@ -235,12 +271,18 @@ async def handle_count_input(update: Update, context: ContextTypes.DEFAULT_TYPE)
             "❌ الرجاء إدخال رقم صحيح (من 1 إلى 50)"
         )
         return GENERATE_COUNT
+    except Exception as e:
+        logger.error(f"خطأ في معالج الإدخال: {e}")
+        await update.message.reply_text(
+            "❌ حدث خطأ، يرجى المحاولة مرة أخرى"
+        )
+        return GENERATE_COUNT
 
 
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """معالج أمر المساعدة"""
     help_text = """
-/start - بدء البوت
+/start - بدء البوت والعودة للقائمة الرئيسية
 /help - عرض المساعدة
 /stats - عرض الإحصائيات
 /available - عرض اليوزرات المتاحة
@@ -252,7 +294,7 @@ async def stats_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
     """معالج أمر الإحصائيات"""
     stats = db.get_statistics()
     stats_message = f"""
-📊 الإحصائيات:
+📊 **الإحصائيات:**
 
 📌 إجمالي اليوزرات المتاحة: {stats.get('total_available_usernames', 0)}
 🔍 إجمالي الفحوصات: {stats.get('total_checks', 0)}
@@ -267,9 +309,9 @@ async def available_command(update: Update, context: ContextTypes.DEFAULT_TYPE) 
     
     if usernames:
         usernames_text = '\n'.join([f"• @{u}" for u in usernames])
-        message = f"📋 أحدث {len(usernames)} يوزرات متاحة:\n\n{usernames_text}"
+        message = f"📋 **أحدث {len(usernames)} يوزرات متاحة:**\n\n{usernames_text}"
     else:
-        message = "لا توجد يوزرات متاحة حتى الآن."
+        message = "❌ لا توجد يوزرات متاحة حتى الآن."
     
     await update.message.reply_text(message)
 
