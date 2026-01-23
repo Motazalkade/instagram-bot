@@ -27,8 +27,14 @@ logger = logging.getLogger(__name__)
 MAIN_MENU, GENERATE_COUNT, CHECKING = range(3)
 
 # تهيئة الأدوات
+import os
+
 generator = UsernameGenerator()
-checker = InstagramChecker()
+# استخدام بيانات متغيرات البيئة أو البيانات المباشرة
+checker = InstagramCheckerV2(
+    username=os.getenv('INSTAGRAM_USERNAME', 'jbrn3870'),
+    password=os.getenv('INSTAGRAM_PASSWORD', 'zzxxcc123@#')
+)
 db = DatabaseManager()
 
 
